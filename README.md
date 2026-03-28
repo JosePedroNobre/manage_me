@@ -66,15 +66,18 @@ flutter pub get
 
 # Build for web
 flutter build web --release
+```
 
-# Start everything (CORS proxy + Claude bridge + web server)
-# Double-click start.command in Finder, or:
+Then just **double-click `start.command`** in Finder. It launches all 3 services, opens your browser, and stops everything cleanly with Ctrl+C.
+
+```bash
+# Or from terminal:
 ./start.command
 ```
 
 Opens at **http://localhost:8080**
 
-### Manual start
+### Manual start (if you prefer separate terminals)
 
 ```bash
 # Terminal 1 — CORS proxy (routes API calls from browser)
