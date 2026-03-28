@@ -62,6 +62,71 @@ class GitLabService {
     );
     return data is List ? data : [];
   }
+
+  /// Get full issue details
+  Future<Map<String, dynamic>> getIssue(int projectId, int iid) async {
+    final data = await _get(
+      'https://$domain/api/v4/projects/$projectId/issues/$iid',
+      'issue_${projectId}_$iid',
+      ttl: const Duration(minutes: 5),
+    );
+    return data is Map<String, dynamic> ? data : {};
+  }
+
+  /// Get MR diff (changes)
+  Future<List<dynamic>> getMRChanges(int projectId, int iid) async {
+    final data = await _get(
+      'https://$domain/api/v4/projects/$projectId/merge_requests/$iid/changes',
+      'mr_changes_${projectId}_$iid',
+      ttl: const Duration(minutes: 3),
+    );
+    if (data is Map) return data['changes'] as List? ?? [];
+    return [];
+  }
+
+  /// Get MR diff as raw text
+  Future<String> getMRDiff(int projectId, int iid) async {
+    final res = await ApiClient.get(
+      'https://$domain/api/v4/projects/$projectId/merge_requests/$iid/changes',
+      headers: _headers,
+    );
+    if (res.statusCode != 200) return '';
+    final data = jsonDecode(res.body);
+    final changes = data['changes'] as List? ?? [];
+    final buf = StringBuffer();
+    for (final c in changes) {
+      buf.writeln('--- ${c['old_path'] ?? ''}');
+      buf.writeln('+++ ${c['new_path'] ?? ''}');
+      buf.writeln(c['diff'] ?? '');
+    }
+    return buf.toString();
+  }
+
+  /// Post a note (comment) on an MR
+  Future<bool> postMRNote(int projectId, int iid, String body) async {
+    final res = await ApiClient.post(
+      'https://$domain/api/v4/projects/$projectId/merge_requests/$iid/notes',
+      headers: _headers,
+      body: jsonEncode({'body': body}),
+    );
+    return res.statusCode == 201;
+  }
+
+  /// Post a note (comment) on an issue
+  Future<bool> postIssueNote(int projectId, int iid, String body) async {
+    final res = await ApiClient.post(
+      'https://$domain/api/v4/projects/$projectId/issues/$iid/notes',
+      headers: _headers,
+      body: jsonEncode({'body': body}),
+    );
+    return res.statusCode == 201;
+  }
+
+  /// Get issue URL
+  String issueUrl(String webUrl) => webUrl;
+
+  /// Get MR URL
+  String mrUrl(String webUrl) => webUrl;
 }
 
 class _CacheEntry {
