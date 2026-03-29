@@ -141,6 +141,7 @@ class _AIReviewDialogState extends State<_AIReviewDialog> {
   String _output = '';
   final _scrollCtrl = ScrollController();
   List<dynamic> _comments = [];
+  final Set<int> _selected = {};
   String? _error;
   bool _posting = false;
 
@@ -200,41 +201,65 @@ class _AIReviewDialogState extends State<_AIReviewDialog> {
         onLog: _addChunk,
       );
 
-      if (mounted) setState(() { _comments = review.comments.map((c) => {'file': c.file, 'comment': c.comment, 'severity': c.severity}).toList(); _raw = review.raw; _loading = false; });
+      if (mounted) setState(() {
+        _comments = review.comments.map((c) => {'file': c.file, 'line': c.line, 'comment': c.comment, 'severity': c.severity}).toList();
+        _selected.addAll(List.generate(_comments.length, (i) => i));
+        _raw = review.raw; _loading = false;
+      });
     } catch (e) {
       if (mounted) setState(() { _error = '$e'; _loading = false; });
     }
   }
 
   Future<void> _postAsComment() async {
-    if (_posting) return;
+    if (_posting || _selected.isEmpty) return;
     setState(() => _posting = true);
     try {
-      final buf = StringBuffer();
-      buf.writeln('## Code Review\n');
-      for (final c in _comments) {
-        final sev = c['severity'] ?? 'info';
-        final icon = sev == 'critical' ? '\u{1F6A8}' : sev == 'warning' ? '\u26A0\uFE0F' : sev == 'suggestion' ? '\u{1F4A1}' : '\u2705';
-        buf.writeln('$icon **${c['file']}**');
-        buf.writeln('${c['comment']}\n');
+      final url = 'https://api.bitbucket.org/2.0/repositories/${widget.td.config.bitbucket!.workspace}/${widget.repoSlug}/pullrequests/${widget.prId}/comments';
+      final headers = {
+        'Authorization': 'Basic ${base64Encode(utf8.encode('${widget.td.config.bitbucket!.email}:${widget.td.config.bitbucket!.token}'))}',
+        'Content-Type': 'application/json',
+      };
+
+      final inlineComments = <Map<String, dynamic>>[];
+      final generalComments = <Map<String, dynamic>>[];
+      for (int i = 0; i < _comments.length; i++) {
+        if (!_selected.contains(i)) continue;
+        final c = _comments[i];
+        final line = (c['line'] as num?)?.toInt() ?? 0;
+        if (c['file'] != 'general' && line > 0) {
+          inlineComments.add(c);
+        } else {
+          generalComments.add(c);
+        }
       }
 
-      // Post comment to Bitbucket PR (as the user)
-      final url = 'https://api.bitbucket.org/2.0/repositories/${widget.td.config.bitbucket!.workspace}/${widget.repoSlug}/pullrequests/${widget.prId}/comments';
-      final res = await http.post(
-        Uri.parse(url),
-        headers: {
-          'Authorization': 'Basic ${base64Encode(utf8.encode('${widget.td.config.bitbucket!.email}:${widget.td.config.bitbucket!.token}'))}',
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({'content': {'raw': buf.toString()}}),
-      );
+      bool ok = true;
+
+      // Post inline comments on the specific lines
+      for (final c in inlineComments) {
+        final res = await http.post(Uri.parse(url), headers: headers, body: jsonEncode({
+          'content': {'raw': c['comment']},
+          'inline': {'path': c['file'], 'to': c['line']},
+        }));
+        if (res.statusCode != 201) ok = false;
+      }
+
+      // Post general comments as a single comment
+      if (generalComments.isNotEmpty) {
+        final buf = StringBuffer();
+        for (final c in generalComments) {
+          buf.writeln('${c['comment']}\n');
+        }
+        final res = await http.post(Uri.parse(url), headers: headers, body: jsonEncode({'content': {'raw': buf.toString()}}));
+        if (res.statusCode != 201) ok = false;
+      }
 
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(res.statusCode == 201 ? 'Review posted to PR #${widget.prId}' : 'Failed: ${res.statusCode}'),
-            backgroundColor: res.statusCode == 201 ? AppColors.green : AppColors.red),
+          SnackBar(content: Text(ok ? 'Review posted to PR #${widget.prId}' : 'Failed to post'),
+            backgroundColor: ok ? AppColors.green : AppColors.red),
         );
       }
     } catch (e) {
@@ -291,10 +316,26 @@ class _AIReviewDialogState extends State<_AIReviewDialog> {
                     ]),
                     const SizedBox(height: 4),
                     Text('${widget.repo} #${widget.prId}', style: const TextStyle(fontSize: 12, color: AppColors.text3)),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 12),
+                    Row(children: [
+                      Text('${_selected.length}/${_comments.length} selected', style: const TextStyle(fontSize: 12, color: AppColors.text2)),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () => setState(() { _selected.addAll(List.generate(_comments.length, (i) => i)); }),
+                        child: const Text('Select all', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.accent)),
+                      ),
+                      const SizedBox(width: 12),
+                      GestureDetector(
+                        onTap: () => setState(() => _selected.clear()),
+                        child: const Text('None', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.text3)),
+                      ),
+                    ]),
+                    const SizedBox(height: 12),
 
-                    ..._comments.map((c) {
+                    ...List.generate(_comments.length, (i) {
+                      final c = _comments[i];
                       final sev = c['severity'] ?? 'info';
+                      final isSelected = _selected.contains(i);
                       Color sevColor; IconData sevIcon;
                       switch (sev) {
                         case 'critical': sevColor = AppColors.red; sevIcon = Icons.error;
@@ -302,18 +343,35 @@ class _AIReviewDialogState extends State<_AIReviewDialog> {
                         case 'suggestion': sevColor = AppColors.blue; sevIcon = Icons.lightbulb;
                         default: sevColor = AppColors.green; sevIcon = Icons.check_circle;
                       }
-                      return Container(
-                        margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(color: AppColors.bg0, borderRadius: BorderRadius.circular(8), border: Border(left: BorderSide(color: sevColor, width: 3))),
-                        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                          Row(children: [
-                            Icon(sevIcon, size: 14, color: sevColor),
-                            const SizedBox(width: 6),
-                            Text(c['file'] ?? '', style: TextStyle(fontSize: 11, color: sevColor, fontWeight: FontWeight.w600, fontFamily: 'monospace')),
+                      return GestureDetector(
+                        onTap: () => setState(() { isSelected ? _selected.remove(i) : _selected.add(i); }),
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 8), padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isSelected ? AppColors.bg0 : AppColors.bg0.withAlpha(120),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border(left: BorderSide(color: isSelected ? sevColor : AppColors.bg3, width: 3)),
+                          ),
+                          child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2, right: 10),
+                              child: Icon(isSelected ? Icons.check_box_rounded : Icons.check_box_outline_blank_rounded, size: 20, color: isSelected ? AppColors.accent : AppColors.text3),
+                            ),
+                            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                              Row(children: [
+                                Icon(sevIcon, size: 14, color: isSelected ? sevColor : AppColors.text3),
+                                const SizedBox(width: 6),
+                                Flexible(child: Text(c['file'] ?? '', style: TextStyle(fontSize: 11, color: isSelected ? sevColor : AppColors.text3, fontWeight: FontWeight.w600, fontFamily: 'monospace'))),
+                                if ((c['line'] as num?)?.toInt() != null && (c['line'] as num).toInt() > 0) ...[
+                                  const SizedBox(width: 6),
+                                  Text('L${c['line']}', style: TextStyle(fontSize: 10, color: isSelected ? AppColors.accent : AppColors.text3, fontFamily: 'monospace')),
+                                ],
+                              ]),
+                              const SizedBox(height: 4),
+                              Text(c['comment'] ?? '', style: TextStyle(fontSize: 13, color: isSelected ? AppColors.text1 : AppColors.text3, height: 1.5)),
+                            ])),
                           ]),
-                          const SizedBox(height: 4),
-                          Text(c['comment'] ?? '', style: const TextStyle(fontSize: 13, color: AppColors.text1, height: 1.5)),
-                        ]),
+                        ),
                       );
                     }),
 
@@ -331,9 +389,9 @@ class _AIReviewDialogState extends State<_AIReviewDialog> {
                       OutlinedButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
                       const SizedBox(width: 8),
                       ElevatedButton.icon(
-                        onPressed: _posting ? null : _postAsComment,
+                        onPressed: _posting || _selected.isEmpty ? null : _postAsComment,
                         icon: _posting ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Icon(Icons.send, size: 16),
-                        label: const Text('Post as my comment'),
+                        label: Text('Post ${_selected.length} comment${_selected.length == 1 ? '' : 's'}'),
                       ),
                     ]),
                     const SizedBox(height: 4),

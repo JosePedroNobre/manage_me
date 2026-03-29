@@ -313,10 +313,12 @@ Severity guide:
 - "suggestion" = style, naming, or minor improvement
 
 Format as JSON array only, no other text:
-[{{"file": "path/to/file", "comment": "your comment here", "severity": "warning"}}]
+[{{"file": "path/to/file", "line": 42, "comment": "your comment here", "severity": "warning"}}]
+
+The "line" field must be a line number from the NEW version of the file (the + side of the diff). Pick the most relevant changed line for each comment. If a comment applies to a block of code, use the first line of that block. Every comment MUST have a line number — no exceptions.
 
 If nothing to flag:
-[{{"file": "general", "comment": "Looks solid, nothing jumps out.", "severity": "info"}}]
+[{{"file": "general", "line": 0, "comment": "Looks solid, nothing jumps out.", "severity": "info"}}]
 
 PR: {pr_title}
 {f'Context: {pr_description}' if pr_description else ''}

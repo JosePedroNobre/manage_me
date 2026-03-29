@@ -34,4 +34,10 @@ class ApiClient {
     final h = {...?headers, 'Content-Type': 'application/json'};
     return http.post(Uri.parse(proxyUrl(url)), headers: h, body: body);
   }
+
+  /// PUT with proxy support.
+  static Future<http.Response> put(String url, {Map<String, String>? headers, String? body}) {
+    final h = {...?headers, 'Content-Type': 'application/json'};
+    return http.put(Uri.parse(proxyUrl(url)), headers: h, body: body);
+  }
 }

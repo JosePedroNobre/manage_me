@@ -41,7 +41,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     int c = 1;
     if (td.jira != null) c++;
     if (td.github != null) c++;
-    if (td.gitlab != null) c++;
+    if (td.gitlab != null) c += 2; // MRs + Issues
     if (td.bitbucket != null) c++;
     return c;
   }
@@ -52,7 +52,10 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     if (td == null) return tabs;
     if (td.jira != null) tabs.add(_TabDef('Jira', Icons.task_alt_rounded, td.jiraIssues.length));
     if (td.github != null) tabs.add(_TabDef('GitHub', Icons.code_rounded, td.ghMyPRs.length + td.ghReviewReqs.length + td.ghAssigned.length));
-    if (td.gitlab != null) tabs.add(_TabDef('GitLab', Icons.merge_rounded, td.glMyMRs.length + td.glReviews.length + td.glAssigned.length));
+    if (td.gitlab != null) {
+      tabs.add(_TabDef('GL MRs', Icons.merge_rounded, td.glMyMRs.length + td.glReviews.length));
+      tabs.add(_TabDef('GL Issues', Icons.task_alt_rounded, td.glAssigned.length));
+    }
     if (td.bitbucket != null) tabs.add(_TabDef('PRs', Icons.merge_rounded, td.bbPRs.length));
     return tabs;
   }
@@ -63,7 +66,10 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     if (td == null) return views;
     if (td.jira != null) views.add(const JiraTab());
     if (td.github != null) views.add(const GitHubTab());
-    if (td.gitlab != null) views.add(const GitLabTab());
+    if (td.gitlab != null) {
+      views.add(const GitLabMRsTab());
+      views.add(const GitLabIssuesTab());
+    }
     if (td.bitbucket != null) views.add(const BitbucketTab());
     return views;
   }

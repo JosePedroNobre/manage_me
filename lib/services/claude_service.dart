@@ -30,7 +30,7 @@ class ClaudeService {
 
     final comments = (result['comments'] as List?) ?? [];
     return ClaudeReview(
-      comments: comments.map((c) => ClaudeComment(file: c['file'] ?? '', comment: c['comment'] ?? '', severity: c['severity'] ?? 'info')).toList(),
+      comments: comments.map((c) => ClaudeComment(file: c['file'] ?? '', line: (c['line'] as num?)?.toInt() ?? 0, comment: c['comment'] ?? '', severity: c['severity'] ?? 'info')).toList(),
       raw: result['raw'] ?? '',
     );
   }
@@ -165,7 +165,8 @@ class ClaudeReview {
 
 class ClaudeComment {
   final String file;
+  final int line;
   final String comment;
   final String severity;
-  ClaudeComment({required this.file, required this.comment, required this.severity});
+  ClaudeComment({required this.file, this.line = 0, required this.comment, required this.severity});
 }

@@ -160,7 +160,11 @@ class AppState extends ChangeNotifier {
   Future<void> _loadGitLab(TeamData td) async {
     try {
       final results = await Future.wait([td.gitlab!.getMyMRs(), td.gitlab!.getReviewRequests(), td.gitlab!.getAssignedIssues()]);
-      td.glMyMRs = results[0]; td.glReviews = results[1]; td.glAssigned = results[2];
+      td.glMyMRs = results[0];
+      // Deduplicate: remove from assigned any MRs that are already in "my MRs"
+      final myIds = td.glMyMRs.map((m) => m['id']).toSet();
+      td.glReviews = results[1].where((m) => !myIds.contains(m['id'])).toList();
+      td.glAssigned = results[2];
     } catch (e) { _addError('GitLab (${td.config.name}): $e'); }
   }
 
