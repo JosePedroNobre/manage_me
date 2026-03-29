@@ -103,7 +103,8 @@ class _GitLabMRCardState extends State<_GitLabMRCard> {
     final hasCachedReview = td.aiCache.reviews.containsKey(cacheKey);
     final statusLabel = _extractWorkflowLabel(labels);
     final mrState = mr['state'] ?? '';
-    final displayStatus = statusLabel ?? (mr['draft'] == true ? 'Draft' : mrState == 'merged' ? 'Merged' : mrState == 'closed' ? 'Closed' : 'Open');
+    // DEBUG: show raw labels in status if no workflow label found
+    final displayStatus = statusLabel ?? (mr['draft'] == true ? 'Draft' : mrState == 'merged' ? 'Merged' : mrState == 'closed' ? 'Closed' : labels.isEmpty ? 'Open (no labels)' : 'Open [${labels.join(", ")}]');
     final statusCat = statusLabel != null ? _labelCategory(statusLabel) : (mrState == 'merged' ? 'done' : mrState == 'closed' ? 'blocked' : mr['draft'] == true ? 'todo' : 'progress');
     final nonWorkflowLabels = labels.where((l) => !_isWorkflowLabel(l is String ? l : '$l')).toList();
 
@@ -329,7 +330,7 @@ class _GitLabIssueCardState extends State<_GitLabIssueCard> {
     final issueState = issue['state'] ?? '';
     final typeName = _detectType(labels);
     final statusLabel = _extractWorkflowLabel(labels);
-    final displayStatus = statusLabel ?? (issueState == 'closed' ? 'Closed' : 'Open');
+    final displayStatus = statusLabel ?? (issueState == 'closed' ? 'Closed' : labels.isEmpty ? 'Open (no labels)' : 'Open [${labels.join(", ")}]');
     final statusCat = statusLabel != null ? _labelCategory(statusLabel) : (issueState == 'closed' ? 'done' : 'todo');
     final nonWorkflowLabels = labels.where((l) => !_isWorkflowLabel(l is String ? l : '$l')).toList();
 
